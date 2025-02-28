@@ -3,7 +3,7 @@
 int main(int argc, char *argv[])
 {
     ms7210_dev_t dev;
-    char *i2c_dev = "/dev/i2c-1";
+    char *i2c_dev = "/dev/i2c-7";
     int width = 1920;
     int height = 1080;
     int refresh = 60;
@@ -74,16 +74,16 @@ int main(int argc, char *argv[])
     }
 
     struct videotiming vt = {
-        .polarity = 0,
-        .htotal = width + 160,
-        .vtotal = height + 45,
-        .hactive = width,
-        .vactive = height,
-        .pixclk = width * height * refresh / 10,
-        .vfreq = refresh * 100,
-        .hoffset = 40,
-        .voffset = 5,
-        .hsyncwidth = 40,
+        .polarity = 0x07,
+        .htotal = 2200,
+        .vtotal = 1125,
+        .hactive = 1920,
+        .vactive = 1080,
+        .pixclk = 14850,
+        .vfreq = 6000,
+        .hoffset = 192,
+        .voffset = 41,
+        .hsyncwidth = 44,
         .vsyncwidth = 5
     };
 

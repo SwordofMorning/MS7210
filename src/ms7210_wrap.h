@@ -219,7 +219,7 @@ typedef struct {
     int spdif;
 } ms7210_dev_t;
 
-#define MS7210_I2C_ADDR 0x56
+#define MS7210_I2C_ADDR 0x2B
 
 int ms7210_dvin_timing_config(ms7210_dev_t *dev, struct dvin_config *dc, struct videotiming *vt, enum HDMI_CLK_REPEAT *rpt);
 void ms7210_hdmi_tx_output_config(ms7210_dev_t *dev, struct hdmi_config *hc);
