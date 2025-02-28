@@ -1,10 +1,35 @@
 #include "ms7210_wrap.h"
 
+static int ms7210_check(ms7210_dev_t *dev, uint16_t reg, uint8_t write_value)
+{
+    uint8_t read_value;
+    int ret;
+    
+    ret = ms7210_read(dev, reg, &read_value);
+    if (ret < 0) {
+        printf("Check reg 0x%04x failed - read error\n", reg);
+        return ret;
+    }
+    
+    if (read_value != write_value) {
+        printf("Check reg 0x%04x failed - write: 0x%02x, read: 0x%02x\n",
+               reg, write_value, read_value);
+        return -1;
+    }
+    
+    #if 1
+    printf("Check reg 0x%04x success - value: 0x%02x\n", reg, read_value);
+    #endif
+    
+    return 0;
+}
+
 int ms7210_write(ms7210_dev_t *dev, uint16_t reg, uint8_t value)
 {
     uint8_t buf[3];
     struct i2c_msg messages[1];
     struct i2c_rdwr_ioctl_data packets;
+    int ret;
 
     buf[0] = (reg >> 8) & 0xFF;
     buf[1] = reg & 0xFF; 
@@ -21,6 +46,11 @@ int ms7210_write(ms7210_dev_t *dev, uint16_t reg, uint8_t value)
     if(ioctl(dev->i2c_fd, I2C_RDWR, &packets) < 0) {
         printf("Write reg 0x%04x failed: %s\n", reg, strerror(errno));
         return -1;
+    }
+
+    ret = ms7210_check(dev, reg, value);
+    if(ret < 0) {
+        return ret;
     }
 
     return 0;
@@ -247,16 +277,28 @@ void ms7210_hdmi_tx_shell_audio_mute_enable(ms7210_dev_t *dev, bool en)
                        0x04, en ? 0x04 : 0x00);
 }
 
-int ms7210_dvin_timing_config(ms7210_dev_t *dev, struct dvin_config *dc, struct videotiming *vt, enum HDMI_CLK_REPEAT *rpt)
+int ms7210_dvin_timing_config(ms7210_dev_t *dev, struct dvin_config *dc,
+                             struct videotiming *vt, enum HDMI_CLK_REPEAT *rpt)
 {
+    printf("\n=== Starting DVIN Timing Configuration ===\n");
+    printf("Initial timing parameters:\n");
+    printf("- H Total: %d\n", vt->htotal);
+    printf("- V Total: %d\n", vt->vtotal);
+    printf("- H Active: %d\n", vt->hactive);
+    printf("- V Active: %d\n", vt->vactive);
+    printf("- Pixel Clock: %d\n", vt->pixclk);
+    printf("- V Frequency: %d\n", vt->vfreq);
+    
     uint8_t val = 0;
     unsigned int pix_shift = 3, line_shift = 2;
     int clkx2 = 0;
     struct videotiming svt;
 
-    // Read clock select register
     ms7210_read(dev, MS7210_MISC_DIG_CLK_SEL_REG, &val);
+    printf("Clock select register value: 0x%02x\n", val);
+    
     if (val & 1) {
+        printf("Clock x2 mode detected, adjusting parameters...\n");
         clkx2 = 1;
         vt->htotal /= *rpt;
         vt->hsyncwidth /= *rpt;
@@ -266,10 +308,10 @@ int ms7210_dvin_timing_config(ms7210_dev_t *dev, struct dvin_config *dc, struct 
         *rpt = 0;
     }
 
-    // Copy timing parameters
     svt = *vt;
 
     if (*rpt) {
+        printf("Applying clock repeat factor...\n");
         clkx2 = 1;
         svt.htotal /= *rpt;
         svt.hsyncwidth /= *rpt;
@@ -343,65 +385,107 @@ int ms7210_dvin_timing_config(ms7210_dev_t *dev, struct dvin_config *dc, struct 
     ms7210_update_bits(dev, MS7210_DVIN_SYNCOUT_FLIP_REG,
                        0x04, (svt.polarity & 0x01) ? 0x04 : 0x00);
 
+    printf("=== DVIN Timing Configuration Complete ===\n");
+    printf("Final clock x2 status: %d\n\n", clkx2);
+
     return clkx2;
 }
 
 void ms7210_hdmi_tx_phy_config(ms7210_dev_t *dev, unsigned int video_clk)
 {
+    printf("\n=== Starting PHY Configuration ===\n");
+    
+    printf("Selecting clock source...\n");
     ms7210_hdmi_tx_clk_sel(dev, 1);
 
+    printf("Initializing PHY with TMDS clock: %d\n", video_clk);
     ms7210_hdmi_tx_phy_init(dev, video_clk);
+    
+    printf("Enabling PHY power...\n");
     ms7210_hdmi_tx_phy_power_enable(dev, true);
-    /* delay > 100us for PLLV power stable */
-    usleep(10000);  // 10ms
+    
+    printf("Waiting for PLL power stability...\n");
+    usleep(10000);
+    
+    printf("Setting PHY clock...\n");
     ms7210_hdmi_tx_phy_set_clk(dev, video_clk);
+    
+    printf("=== PHY Configuration Complete ===\n\n");
 }
 
 void ms7210_hdmi_tx_output_config(ms7210_dev_t *dev, struct hdmi_config *hc)
 {
-    // Disable output and HDCP
+    printf("\n=== Starting HDMI TX Output Configuration ===\n");
+    
+    printf("Disabling PHY output and HDCP...\n");
     ms7210_hdmi_tx_phy_output_enable(dev, false);
     ms7210_hdmi_tx_hdcp_enable(dev, false);
     ms7210_hdmi_tx_shell_set_gcp_packet_avmute(dev, false);
 
-    // Configure color space
+    printf("Configuring CSC for color space: %d\n", hc->color_space);
     ms7210_csc_config_output(dev, hc->color_space);
 
-    // Configure PHY and transmitter
+    printf("Configuring PHY with video clock: %d\n", hc->video_clk);
     ms7210_hdmi_tx_phy_config(dev, hc->video_clk);
+    
+    printf("Configuring HDMI Shell...\n");
     ms7210_hdmi_tx_shell_config(dev, hc);
 
-    // Enable output
+    printf("Enabling output...\n");
     ms7210_hdmi_tx_shell_video_mute_enable(dev, false);
     ms7210_hdmi_tx_shell_audio_mute_enable(dev, false);
     ms7210_hdmi_tx_phy_output_enable(dev, true);
+    
+    printf("=== HDMI TX Output Configuration Complete ===\n\n");
 }
-
 // HDMI Shell配置主函数
 void ms7210_hdmi_tx_shell_config(ms7210_dev_t *dev, struct hdmi_config *hc)
 {
+    printf("\n=== Starting Shell Configuration ===\n");
+    
+    printf("Enabling shell reset...\n");
     ms7210_hdmi_tx_shell_reset_enable(dev, true);
+    
+    printf("Initializing shell...\n");
     ms7210_hdmi_tx_shell_init(dev);
+    
+    printf("Setting HDMI/DVI mode: %s\n", hc->hdmi_flag ? "HDMI" : "DVI");
     ms7210_hdmi_tx_shell_set_hdmi_out(dev, hc->hdmi_flag);
+    
+    printf("Setting clock repeat: %d\n", hc->clk_rpt);
     ms7210_hdmi_tx_shell_set_clk_repeat(dev, hc->clk_rpt);
 
-    /* if input is YUV422 and deep color mode, color space must set to RGB */
-    if (hc->color_space == HDMI_YCBCR422 && hc->color_depth != HDMI_COLOR_DEPTH_8BIT)
+    printf("Setting color space: %d\n", hc->color_space);
+    if (hc->color_space == HDMI_YCBCR422 && hc->color_depth != HDMI_COLOR_DEPTH_8BIT) {
+        printf("YUV422 with deep color detected, forcing RGB mode\n");
         ms7210_hdmi_tx_shell_set_color_space(dev, HDMI_RGB);
-    else
+    } else {
         ms7210_hdmi_tx_shell_set_color_space(dev, hc->color_space);
+    }
 
+    printf("Setting color depth: %d\n", hc->color_depth);
     ms7210_hdmi_tx_shell_set_color_depth(dev, hc->color_depth);
+
+    printf("Configuring audio parameters...\n");
+    printf("- Rate: %d\n", hc->audio_rate);
+    printf("- Bits: %d\n", hc->audio_bits);
+    printf("- Channels: %d\n", hc->audio_channels);
     ms7210_hdmi_tx_shell_set_audio_rate(dev, hc->audio_rate);
     ms7210_hdmi_tx_shell_set_audio_bits(dev, hc->audio_bits);
     ms7210_hdmi_tx_shell_set_audio_channels(dev, hc->audio_channels);
 
+    printf("Disabling shell reset...\n");
     ms7210_hdmi_tx_shell_reset_enable(dev, false);
 
+    printf("Setting InfoFrames...\n");
     ms7210_hdmi_tx_shell_set_video_infoframe(dev, hc);
     ms7210_hdmi_tx_shell_set_audio_infoframe(dev, hc);
-    if (hc->video_format)
+    if (hc->video_format) {
+        printf("Setting vendor specific InfoFrame...\n");
         ms7210_hdmi_tx_shell_set_vendor_specific_infoframe(dev, hc);
+    }
+    
+    printf("=== Shell Configuration Complete ===\n\n");
 }
 
 // Shell初始化
