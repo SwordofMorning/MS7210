@@ -225,6 +225,23 @@ int ms7210_dvin_timing_config(ms7210_dev_t *dev, struct dvin_config *dc, struct 
 void ms7210_hdmi_tx_output_config(ms7210_dev_t *dev, struct hdmi_config *hc);
 void print_usage(const char *name);
 int ms7210_init(ms7210_dev_t *dev);
+void ms7210_hdmi_tx_shell_video_mute_enable(ms7210_dev_t *dev, bool en);
+void ms7210_hdmi_tx_shell_audio_mute_enable(ms7210_dev_t *dev, bool en);
+void ms7210_hdmi_tx_shell_set_gcp_packet_avmute(ms7210_dev_t *dev, bool mute);
+void ms7210_hdmi_tx_hdcp_enable(ms7210_dev_t *dev, bool enable);
+void ms7210_hdmi_tx_phy_output_enable(ms7210_dev_t *dev, bool enable);
+void ms7210_csc_config_output(ms7210_dev_t *dev, enum HDMI_CS cs);
+void ms7210_hdmi_tx_output_config(ms7210_dev_t *dev, struct hdmi_config *hc);
+void ms7210_hdmi_tx_shell_config(ms7210_dev_t *dev, struct hdmi_config *hc);
+int ms7210_write16(ms7210_dev_t *dev, uint16_t reg, uint16_t value);
+void ms7210_misc_audio_pad_in_spdif(ms7210_dev_t *dev);
+void ms7210_dig_pads_pull_set(ms7210_dev_t *dev, unsigned int pull);
+void ms7210_csc_config_input(ms7210_dev_t *dev);
+void ms7210_rc_freq_set(ms7210_dev_t *dev);
+int ms7210_update_bits(ms7210_dev_t *dev, uint16_t reg, uint8_t mask, uint8_t value);
+int ms7210_read(ms7210_dev_t *dev, uint16_t reg, uint8_t *value);
+int ms7210_write(ms7210_dev_t *dev, uint16_t reg, uint8_t value);
+void ms7210_hdmi_tx_phy_config(ms7210_dev_t *dev, unsigned int video_clk);
 
 #ifdef __cplusplus
 }

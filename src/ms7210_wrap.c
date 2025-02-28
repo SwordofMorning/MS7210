@@ -1,6 +1,6 @@
 #include "ms7210_wrap.h"
 
-static int ms7210_write(ms7210_dev_t *dev, uint16_t reg, uint8_t value)
+int ms7210_write(ms7210_dev_t *dev, uint16_t reg, uint8_t value)
 {
     uint8_t buf[3];
     struct i2c_msg messages[1];
@@ -26,7 +26,7 @@ static int ms7210_write(ms7210_dev_t *dev, uint16_t reg, uint8_t value)
     return 0;
 }
 
-static int ms7210_read(ms7210_dev_t *dev, uint16_t reg, uint8_t *value)
+int ms7210_read(ms7210_dev_t *dev, uint16_t reg, uint8_t *value)
 {
     uint8_t buf[2];
     struct i2c_msg messages[2];
@@ -56,8 +56,7 @@ static int ms7210_read(ms7210_dev_t *dev, uint16_t reg, uint8_t *value)
     return 0;
 }
 
-static int ms7210_update_bits(ms7210_dev_t *dev, uint16_t reg, 
-                            uint8_t mask, uint8_t value)
+int ms7210_update_bits(ms7210_dev_t *dev, uint16_t reg, uint8_t mask, uint8_t value)
 {
     uint8_t tmp;
     int ret;
@@ -72,23 +71,23 @@ static int ms7210_update_bits(ms7210_dev_t *dev, uint16_t reg,
     return ms7210_write(dev, reg, tmp);
 }
 
-static void ms7210_rc_freq_set(ms7210_dev_t *dev)
+void ms7210_rc_freq_set(ms7210_dev_t *dev)
 {
     ms7210_write(dev, MS7210_RC_CTRL1_REG, 0x81);
     ms7210_write(dev, MS7210_RC_CTRL1_REG, 0x54);
 }
 
-static void ms7210_csc_config_input(ms7210_dev_t *dev)
+void ms7210_csc_config_input(ms7210_dev_t *dev)
 {
     ms7210_update_bits(dev, MS7210_CSC_CTRL1_REG, 0x03, 0x10 | dev->cs_mode);
 }
 
-static void ms7210_dig_pads_pull_set(ms7210_dev_t *dev, unsigned int pull)
+void ms7210_dig_pads_pull_set(ms7210_dev_t *dev, unsigned int pull)
 {
     ms7210_update_bits(dev, MS7210_IO_CTRL3_REG, 0x30, (pull & 3) << 4);
 }
 
-static void ms7210_misc_audio_pad_in_spdif(ms7210_dev_t *dev)
+void ms7210_misc_audio_pad_in_spdif(ms7210_dev_t *dev)
 {
     if(dev->spdif == 2) {
         ms7210_update_bits(dev, MS7210_RX_PLL_SEL_REG, 0x0c, 0x0c);
@@ -154,7 +153,7 @@ void print_usage(const char *name)
     printf("  -?, --help            Show this help\n");
 }
 
-static int ms7210_write16(ms7210_dev_t *dev, uint16_t reg, uint16_t value)
+int ms7210_write16(ms7210_dev_t *dev, uint16_t reg, uint16_t value)
 {
     int err;
     
@@ -162,6 +161,118 @@ static int ms7210_write16(ms7210_dev_t *dev, uint16_t reg, uint16_t value)
         return err;
         
     return ms7210_write(dev, reg + 1, (value >> 8) & 0xFF);
+}
+
+// HDMI Shell配置
+void ms7210_hdmi_tx_shell_config(ms7210_dev_t *dev, struct hdmi_config *hc)
+{
+    ms7210_hdmi_tx_shell_reset_enable(dev, true);
+    ms7210_hdmi_tx_shell_init(dev);
+    ms7210_hdmi_tx_shell_set_hdmi_out(dev, hc->hdmi_flag);
+    ms7210_hdmi_tx_shell_set_clk_repeat(dev, hc->clk_rpt);
+
+    /* if input is YUV422 and deep color mode, color space must set to RGB */
+    if (hc->color_space == HDMI_YCBCR422 && hc->color_depth != HDMI_COLOR_DEPTH_8BIT)
+        ms7210_hdmi_tx_shell_set_color_space(dev, HDMI_RGB);
+    else
+        ms7210_hdmi_tx_shell_set_color_space(dev, hc->color_space);
+
+    ms7210_hdmi_tx_shell_set_color_depth(dev, hc->color_depth);
+
+    ms7210_hdmi_tx_shell_set_audio_rate(dev, hc->audio_rate);
+    ms7210_hdmi_tx_shell_set_audio_bits(dev, hc->audio_bits);
+    ms7210_hdmi_tx_shell_set_audio_channels(dev, hc->audio_channels);
+
+    ms7210_hdmi_tx_shell_reset_enable(dev, false);
+
+    ms7210_hdmi_tx_shell_set_video_infoframe(dev, hc);
+    ms7210_hdmi_tx_shell_set_audio_infoframe(dev, hc);
+    if (hc->video_format)
+        ms7210_hdmi_tx_shell_set_vendor_specific_infoframe(dev, hc);
+}
+
+// CSC配置
+void ms7210_csc_config_output(ms7210_dev_t *dev, enum HDMI_CS cs)
+{
+    unsigned int c;
+
+    switch (cs) {
+        case HDMI_RGB:
+            c = 0;
+            break;
+        case HDMI_YCBCR444:
+            c = 1;
+            break;
+        case HDMI_YCBCR422:
+            c = 2;
+            break;
+        default:
+            c = 3;
+            break;
+    }
+    ms7210_update_bits(dev, MS7210_CSC_CTRL1_REG, 0x0c, c << 2);
+}
+
+// PHY输出使能
+void ms7210_hdmi_tx_phy_output_enable(ms7210_dev_t *dev, bool enable)
+{
+    if (enable) {
+        /* output data drive control */
+        ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_DATA_DRV_REG + 
+                          dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST,
+                          0x07, 0x07);
+        /* output clk drive control */
+        ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_POWER_REG +
+                          dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST,
+                          0x04, 0x04);
+    } else {
+        /* output clk drive control */
+        ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_POWER_REG +
+                          dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST,
+                          0x04, 0);
+        /* output data drive control */
+        ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_DATA_DRV_REG +
+                          dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST,
+                          0x07, 0);
+    }
+}
+
+// HDCP使能
+void ms7210_hdmi_tx_hdcp_enable(ms7210_dev_t *dev, bool enable)
+{
+    if (enable) {
+        ms7210_write(dev, MS7210_HDMI_TX_HDCP_CONTROL_REG +
+                     dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST, 0x0b);
+    } else {
+        ms7210_write(dev, MS7210_HDMI_TX_HDCP_CONTROL_REG +
+                     dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST, 0x04);
+        ms7210_write(dev, MS7210_HDMI_TX_HDCP_CONTROL_REG +
+                     dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST, 0x00);
+    }
+}
+
+// GCP包静音设置
+void ms7210_hdmi_tx_shell_set_gcp_packet_avmute(ms7210_dev_t *dev, bool mute)
+{
+    ms7210_update_bits(dev, MS7210_HDMI_TX_SHELL_CTRL_REG +
+                       dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST,
+                       0x80, (mute) ? 0x80 : 0x00);
+}
+
+// 视频静音使能
+void ms7210_hdmi_tx_shell_video_mute_enable(ms7210_dev_t *dev, bool en)
+{
+    ms7210_update_bits(dev, MS7210_HDMI_TX_SHELL_AVMUTE_REG +
+                       dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST,
+                       0x02, en ? 0x02 : 0x00);
+}
+
+// 音频静音使能
+void ms7210_hdmi_tx_shell_audio_mute_enable(ms7210_dev_t *dev, bool en)
+{
+    ms7210_update_bits(dev, MS7210_HDMI_TX_SHELL_AVMUTE_REG +
+                       dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST,
+                       0x04, en ? 0x04 : 0x00);
 }
 
 int ms7210_dvin_timing_config(ms7210_dev_t *dev, struct dvin_config *dc, struct videotiming *vt, enum HDMI_CLK_REPEAT *rpt)
@@ -261,6 +372,17 @@ int ms7210_dvin_timing_config(ms7210_dev_t *dev, struct dvin_config *dc, struct 
                        0x04, (svt.polarity & 0x01) ? 0x04 : 0x00);
 
     return clkx2;
+}
+
+void ms7210_hdmi_tx_phy_config(ms7210_dev_t *dev, unsigned int video_clk)
+{
+    ms7210_hdmi_tx_clk_sel(dev, 1);
+
+    ms7210_hdmi_tx_phy_init(dev, video_clk);
+    ms7210_hdmi_tx_phy_power_enable(dev, true);
+    /* delay > 100us for PLLV power stable */
+    usleep(10000);  // 10ms
+    ms7210_hdmi_tx_phy_set_clk(dev, video_clk);
 }
 
 void ms7210_hdmi_tx_output_config(ms7210_dev_t *dev, struct hdmi_config *hc)
