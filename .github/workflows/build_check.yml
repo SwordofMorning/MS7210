@@ -1,0 +1,26 @@
+name: Build_Check
+
+on:
+  push:
+    branches: '**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Configure CMake
+      run: |
+        sed -i 's/^SET(CMAKE_C_COMPILER aarch64-none-linux-gnu-gcc)/#SET(CMAKE_C_COMPILER aarch64-none-linux-gnu-gcc)/' CMakeLists.txt
+        sed -i 's/^SET(CMAKE_CXX_COMPILER aarch64-none-linux-gnu-c++)/#SET(CMAKE_CXX_COMPILER aarch64-none-linux-gnu-c++)/' CMakeLists.txt
+        cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build
+
+    - name: Make
+      run: |
+        cd ${{github.workspace}}/build
+        make

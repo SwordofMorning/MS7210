@@ -1,0 +1,82 @@
+# 基本设置
+Language: Cpp
+BasedOnStyle: Microsoft
+IndentWidth: 4
+ColumnLimit: 180
+UseTab: Never
+
+# 大括号设置
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterClass: true
+  AfterControlStatement: Always
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: true
+  AfterStruct: true
+  AfterUnion: true
+  BeforeCatch: true
+  BeforeElse: true
+  IndentBraces: false
+  AfterExternBlock: false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
+
+# 构造函数初始化列表设置
+BreakConstructorInitializersBeforeComma: false
+BreakConstructorInitializers: BeforeComma
+ConstructorInitializerIndentWidth: 4
+AllowAllConstructorInitializersOnNextLine: true
+ConstructorInitializerAllOnOneLineOrOnePerLine: false
+
+# 注释设置
+SpacesBeforeTrailingComments: 1
+SpacesInLineCommentPrefix:
+  Minimum: 1
+  Maximum: 1
+
+# Include 设置
+SortIncludes: false
+
+# Extern "C" 设置
+IndentExternBlock: NoIndent
+
+# 单行 if 语句设置,这里允许多种风格存在,因此忽略
+# AllowShortIfStatementsOnASingleLine: true
+# AllowShortBlocksOnASingleLine: true
+# AllowShortCaseLabelsOnASingleLine: false
+
+# 其他设置
+AlignAfterOpenBracket: Align
+AllowShortFunctionsOnASingleLine: None
+BinPackParameters: false
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+PointerAlignment: Left
+SpaceAfterCStyleCast: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+AlwaysBreakBeforeMultilineStrings: true
+AllowAllParametersOfDeclarationOnNextLine: false
+
+# Doxygen 注释设置
+CommentPragmas: '^ IWYU pragma:'
+
+# 保持 Doxygen 注释中星号后的空格
+DerivePointerAlignment: false
+ReflowComments: false
+
+# 访问修饰符对齐
+AccessModifierOffset: -4
+
+# 三元运算符设置
+BreakBeforeTernaryOperators: false
+AlignOperands: DontAlign
+
+# 保持条件表达式格式
+AllowShortLambdasOnASingleLine: Empty

@@ -1,0 +1,10 @@
+#pragma once
+
+#define __GIT_BRANCH__ "@GIT_BRANCH@"
+#define __GIT_COMMIT_ID__ "@GIT_COMMIT_ID@"
+#define __GIT_USER__ "@GIT_USER@"
+#define __GIT_CLEAN__ "@GIT_CLEAN@"
+
+#define __COMPILE_HOST__ "@COMPILE_HOST@"
+#define __COMPILE_USER__ "@COMPILE_USER@"
+#define __COMPILE_TIME__ "@COMPILE_TIME@"
