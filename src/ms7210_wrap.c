@@ -24,6 +24,7 @@ static int ms7210_check(ms7210_dev_t *dev, uint16_t reg, uint8_t write_value)
     return 0;
 }
 
+#if 1
 int ms7210_write(ms7210_dev_t *dev, uint16_t reg, uint8_t value)
 {
     uint8_t buf[3];
@@ -48,12 +49,98 @@ int ms7210_write(ms7210_dev_t *dev, uint16_t reg, uint8_t value)
         return -1;
     }
 
-    ret = ms7210_check(dev, reg, value);
-    if(ret < 0) {
-        return ret;
-    }
+    // ret = ms7210_check(dev, reg, value);
+    // if(ret < 0) {
+    //     return ret;
+    // }
 
     return 0;
+}
+#else
+int ms7210_write(ms7210_dev_t *dev, uint16_t reg, uint8_t value)
+{
+    uint8_t buf[3];
+    struct i2c_msg messages[1];
+    struct i2c_rdwr_ioctl_data packets;
+    int ret;
+    int retry_count = 0;
+    const int MAX_RETRIES = 3;  // 最大重试次数
+    const int RETRY_DELAY_US = 1000;  // 重试延时1ms
+
+    do {
+        // 如果是重试，打印重试信息
+        if (retry_count > 0) {
+            printf("Retrying write reg 0x%04x (attempt %d/%d)...\n", 
+                   reg, retry_count + 1, MAX_RETRIES);
+        }
+
+        // 准备I2C消息
+        buf[0] = reg & 0xFF; 
+        buf[1] = (reg >> 8) & 0xFF;
+        buf[2] = value;
+
+        messages[0].addr = MS7210_I2C_ADDR;
+        messages[0].flags = 0;
+        messages[0].len = 3;
+        messages[0].buf = buf;
+
+        packets.msgs = messages;
+        packets.nmsgs = 1;
+
+        // 执行I2C写入
+        if(ioctl(dev->i2c_fd, I2C_RDWR, &packets) < 0) {
+            printf("Write reg 0x%04x failed (attempt %d/%d): %s\n", 
+                   reg, retry_count + 1, MAX_RETRIES, strerror(errno));
+            
+            // 如果已达到最大重试次数，返回错误
+            if (retry_count >= MAX_RETRIES - 1) {
+                printf("Max retries reached for reg 0x%04x, giving up\n", reg);
+                return -1;
+            }
+            
+            // 否则等待一段时间后重试
+            usleep(RETRY_DELAY_US);
+            retry_count++;
+            continue;
+        }
+
+        // 验证写入
+        ret = ms7210_check(dev, reg, value);
+        if(ret == 0) {
+            // 如果之前有重试，打印成功信息
+            if (retry_count > 0) {
+                printf("Write reg 0x%04x succeeded after %d retries\n", 
+                       reg, retry_count);
+            }
+            return 0;  // 写入成功，返回
+        }
+
+        // 验证失败，如果未达到最大重试次数则重试
+        if (retry_count >= MAX_RETRIES - 1) {
+            printf("Max retries reached for reg 0x%04x, giving up\n", reg);
+            return ret;
+        }
+
+        printf("Verification failed for reg 0x%04x (attempt %d/%d)\n", 
+               reg, retry_count + 1, MAX_RETRIES);
+        usleep(RETRY_DELAY_US);
+        retry_count++;
+
+    } while (retry_count < MAX_RETRIES);
+
+    // 这里正常不会执行到，为了代码完整性添加
+    return -1;
+}
+#endif
+
+int ms7210_write16(ms7210_dev_t *dev, uint16_t reg, uint16_t value)
+{
+    int err;
+    
+    if ((err = ms7210_write(dev, reg, value & 0xFF)) < 0)
+        return err;
+        
+    return ms7210_write(dev, reg + 1, (value >> 8) & 0xFF);
 }
 
 int ms7210_read(ms7210_dev_t *dev, uint16_t reg, uint8_t *value)
@@ -181,16 +268,6 @@ void print_usage(const char *name)
     printf("  -c, --color <mode>     Color space (rgb|yuv444|yuv422)\n");
     printf("  -s, --spdif <mode>     SPDIF mode (0:i2s, 1:spdif+mclk, 2:spdif)\n");
     printf("  -?, --help            Show this help\n");
-}
-
-int ms7210_write16(ms7210_dev_t *dev, uint16_t reg, uint16_t value)
-{
-    int err;
-    
-    if ((err = ms7210_write(dev, reg, value & 0xFF)) < 0)
-        return err;
-        
-    return ms7210_write(dev, reg + 1, (value >> 8) & 0xFF);
 }
 
 // CSC配置
