@@ -32,9 +32,9 @@ int ms7210_write(ms7210_dev_t *dev, uint16_t reg, uint8_t value)
     struct i2c_rdwr_ioctl_data packets;
     int ret;
 
-    buf[0] = (reg >> 8) & 0xFF;
-    buf[1] = reg & 0xFF; 
     buf[2] = value;
+    buf[1] = (reg >> 8) & 0xFF;
+    buf[0] = reg & 0xFF; 
 
     messages[0].addr = MS7210_I2C_ADDR;
     messages[0].flags = 0;
@@ -137,10 +137,15 @@ int ms7210_write16(ms7210_dev_t *dev, uint16_t reg, uint16_t value)
 {
     int err;
     
-    if ((err = ms7210_write(dev, reg, value & 0xFF)) < 0)
-        return err;
+    // if ((err = ms7210_write(dev, reg, value & 0xFF)) < 0)
+    //     return err;
         
-    return ms7210_write(dev, reg + 1, (value >> 8) & 0xFF);
+    // return ms7210_write(dev, reg + 1, (value >> 8) & 0xFF);
+
+    if ((err = ms7210_write(dev, reg, (value >> 8) & 0xFF)) < 0)
+        return err;
+    
+    return ms7210_write(dev, reg + 1, value & 0xFF);
 }
 
 int ms7210_read(ms7210_dev_t *dev, uint16_t reg, uint8_t *value)
