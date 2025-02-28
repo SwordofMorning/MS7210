@@ -242,6 +242,24 @@ int ms7210_update_bits(ms7210_dev_t *dev, uint16_t reg, uint8_t mask, uint8_t va
 int ms7210_read(ms7210_dev_t *dev, uint16_t reg, uint8_t *value);
 int ms7210_write(ms7210_dev_t *dev, uint16_t reg, uint8_t value);
 void ms7210_hdmi_tx_phy_config(ms7210_dev_t *dev, unsigned int video_clk);
+void ms7210_hdmi_tx_shell_config(ms7210_dev_t *dev, struct hdmi_config *hc);
+void ms7210_hdmi_tx_shell_init(ms7210_dev_t *dev);
+void ms7210_hdmi_tx_shell_set_hdmi_out(ms7210_dev_t *dev, bool hdmi_out);
+void ms7210_hdmi_tx_shell_set_clk_repeat(ms7210_dev_t *dev, unsigned int rpt);
+void ms7210_hdmi_tx_shell_set_color_space(ms7210_dev_t *dev, unsigned int cs);
+void ms7210_hdmi_tx_shell_set_color_depth(ms7210_dev_t *dev, unsigned int depth);
+void ms7210_hdmi_tx_shell_set_audio_rate(ms7210_dev_t *dev, unsigned int audio_rate);
+void ms7210_hdmi_tx_shell_set_audio_bits(ms7210_dev_t *dev, unsigned int audio_bits);
+void ms7210_hdmi_tx_shell_set_audio_channels(ms7210_dev_t *dev, unsigned int audio_channels);
+void ms7210_hdmi_tx_shell_set_video_infoframe(ms7210_dev_t *dev, struct hdmi_config *hc);
+void ms7210_hdmi_tx_shell_set_audio_infoframe(ms7210_dev_t *dev, struct hdmi_config *hc);
+void ms7210_hdmi_tx_shell_set_vendor_specific_infoframe(ms7210_dev_t *dev, struct hdmi_config *hc);
+void ms7210_hdmi_tx_clk_sel(ms7210_dev_t *dev, unsigned int sel);
+void ms7210_hdmi_tx_phy_init(ms7210_dev_t *dev, unsigned int tmds);
+void ms7210_hdmi_tx_phy_power_enable(ms7210_dev_t *dev, bool enable);
+void ms7210_hdmi_tx_phy_set_clk_ratio(ms7210_dev_t *dev, int ratio);
+void ms7210_hdmi_tx_shell_reset_enable(ms7210_dev_t *dev, bool en);
+void ms7210_hdmi_tx_phy_set_clk(ms7210_dev_t *dev, unsigned int clk);
 
 #ifdef __cplusplus
 }

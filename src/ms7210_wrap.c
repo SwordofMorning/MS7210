@@ -163,34 +163,6 @@ int ms7210_write16(ms7210_dev_t *dev, uint16_t reg, uint16_t value)
     return ms7210_write(dev, reg + 1, (value >> 8) & 0xFF);
 }
 
-// HDMI Shell配置
-void ms7210_hdmi_tx_shell_config(ms7210_dev_t *dev, struct hdmi_config *hc)
-{
-    ms7210_hdmi_tx_shell_reset_enable(dev, true);
-    ms7210_hdmi_tx_shell_init(dev);
-    ms7210_hdmi_tx_shell_set_hdmi_out(dev, hc->hdmi_flag);
-    ms7210_hdmi_tx_shell_set_clk_repeat(dev, hc->clk_rpt);
-
-    /* if input is YUV422 and deep color mode, color space must set to RGB */
-    if (hc->color_space == HDMI_YCBCR422 && hc->color_depth != HDMI_COLOR_DEPTH_8BIT)
-        ms7210_hdmi_tx_shell_set_color_space(dev, HDMI_RGB);
-    else
-        ms7210_hdmi_tx_shell_set_color_space(dev, hc->color_space);
-
-    ms7210_hdmi_tx_shell_set_color_depth(dev, hc->color_depth);
-
-    ms7210_hdmi_tx_shell_set_audio_rate(dev, hc->audio_rate);
-    ms7210_hdmi_tx_shell_set_audio_bits(dev, hc->audio_bits);
-    ms7210_hdmi_tx_shell_set_audio_channels(dev, hc->audio_channels);
-
-    ms7210_hdmi_tx_shell_reset_enable(dev, false);
-
-    ms7210_hdmi_tx_shell_set_video_infoframe(dev, hc);
-    ms7210_hdmi_tx_shell_set_audio_infoframe(dev, hc);
-    if (hc->video_format)
-        ms7210_hdmi_tx_shell_set_vendor_specific_infoframe(dev, hc);
-}
-
 // CSC配置
 void ms7210_csc_config_output(ms7210_dev_t *dev, enum HDMI_CS cs)
 {
@@ -403,4 +375,453 @@ void ms7210_hdmi_tx_output_config(ms7210_dev_t *dev, struct hdmi_config *hc)
     ms7210_hdmi_tx_shell_video_mute_enable(dev, false);
     ms7210_hdmi_tx_shell_audio_mute_enable(dev, false);
     ms7210_hdmi_tx_phy_output_enable(dev, true);
+}
+
+// HDMI Shell配置主函数
+void ms7210_hdmi_tx_shell_config(ms7210_dev_t *dev, struct hdmi_config *hc)
+{
+    ms7210_hdmi_tx_shell_reset_enable(dev, true);
+    ms7210_hdmi_tx_shell_init(dev);
+    ms7210_hdmi_tx_shell_set_hdmi_out(dev, hc->hdmi_flag);
+    ms7210_hdmi_tx_shell_set_clk_repeat(dev, hc->clk_rpt);
+
+    /* if input is YUV422 and deep color mode, color space must set to RGB */
+    if (hc->color_space == HDMI_YCBCR422 && hc->color_depth != HDMI_COLOR_DEPTH_8BIT)
+        ms7210_hdmi_tx_shell_set_color_space(dev, HDMI_RGB);
+    else
+        ms7210_hdmi_tx_shell_set_color_space(dev, hc->color_space);
+
+    ms7210_hdmi_tx_shell_set_color_depth(dev, hc->color_depth);
+    ms7210_hdmi_tx_shell_set_audio_rate(dev, hc->audio_rate);
+    ms7210_hdmi_tx_shell_set_audio_bits(dev, hc->audio_bits);
+    ms7210_hdmi_tx_shell_set_audio_channels(dev, hc->audio_channels);
+
+    ms7210_hdmi_tx_shell_reset_enable(dev, false);
+
+    ms7210_hdmi_tx_shell_set_video_infoframe(dev, hc);
+    ms7210_hdmi_tx_shell_set_audio_infoframe(dev, hc);
+    if (hc->video_format)
+        ms7210_hdmi_tx_shell_set_vendor_specific_infoframe(dev, hc);
+}
+
+// Shell初始化
+void ms7210_hdmi_tx_shell_init(ms7210_dev_t *dev)
+{
+    uint16_t reg_base = dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST;
+
+    ms7210_update_bits(dev, MS7210_HDMI_TX_SHELL_VOLUME_CFG0_REG + reg_base, 
+                       0x01, 0x01);
+
+    /* video and audio clk enable */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_MISC_HDMI_CLK_REG,
+                       0x11 << dev->tx_channel,
+                       0x11 << dev->tx_channel);
+
+    /* audio */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_MISC_AUD_CTRL, 0x0f, 0x00);
+    ms7210_update_bits(dev, MS7210_HDMI_TX_AUDIO_RATE_REG + reg_base, 
+                       0x80, 0x80);
+}
+
+// 设置HDMI/DVI输出模式
+void ms7210_hdmi_tx_shell_set_hdmi_out(ms7210_dev_t *dev, bool hdmi_out)
+{
+    ms7210_update_bits(dev, MS7210_HDMI_TX_SHELL_DVI_REG + 
+                       dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST,
+                       0x01, (hdmi_out) ? 0x00 : 0x01);
+}
+
+// 设置时钟重复
+void ms7210_hdmi_tx_shell_set_clk_repeat(ms7210_dev_t *dev, unsigned int rpt)
+{
+    if (rpt > HDMI_X10CLK)
+        rpt = HDMI_X1CLK;
+
+    ms7210_update_bits(dev, MS7210_HDMI_TX_SHELL_MODE_REG + 
+                       dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST,
+                       0x30, rpt << 4);
+}
+
+// 设置色彩空间
+void ms7210_hdmi_tx_shell_set_color_space(ms7210_dev_t *dev, unsigned int cs)
+{
+    ms7210_update_bits(dev, MS7210_HDMI_TX_SHELL_MODE_REG + 
+                       dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST,
+                       0xc0, cs << 6);
+}
+
+// 设置色深
+void ms7210_hdmi_tx_shell_set_color_depth(ms7210_dev_t *dev, unsigned int depth)
+{
+    uint16_t reg = MS7210_HDMI_TX_SHELL_MODE_REG + 
+                   dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST;
+
+    ms7210_update_bits(dev, reg, 0x04, (depth > 0) ? 0x04 : 0x00);
+    ms7210_update_bits(dev, reg, 0x03, depth);
+}
+
+// 设置音频采样率
+void ms7210_hdmi_tx_shell_set_audio_rate(ms7210_dev_t *dev, unsigned int audio_rate)
+{
+    uint16_t reg = MS7210_HDMI_TX_AUDIO_RATE_REG + 
+                   dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST;
+    uint8_t rate_val;
+
+    switch (audio_rate) {
+        case HDMI_AUD_RATE_96K:
+            rate_val = 0x02;
+            break;
+        case HDMI_AUD_RATE_32K:
+            rate_val = 0x40;
+            break;
+        case HDMI_AUD_RATE_88K2:
+            rate_val = 0x10;
+            break;
+        case HDMI_AUD_RATE_176K4:
+            rate_val = 0x08;
+            break;
+        case HDMI_AUD_RATE_192K:
+            rate_val = 0x01;
+            break;
+        case HDMI_AUD_RATE_44K1:
+        case HDMI_AUD_RATE_48K:
+        default:
+            rate_val = 0x04;
+            break;
+    }
+
+    ms7210_update_bits(dev, reg, 0x7F, rate_val);
+}
+
+// 设置音频位深
+void ms7210_hdmi_tx_shell_set_audio_bits(ms7210_dev_t *dev, unsigned int audio_bits)
+{
+    ms7210_update_bits(dev, MS7210_HDMI_TX_AUDIO_CFG_I2S_REG + 
+                       dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST,
+                       0x30, audio_bits ? 0x00 : 0x10);
+}
+
+// 设置音频通道
+void ms7210_hdmi_tx_shell_set_audio_channels(ms7210_dev_t *dev, unsigned int audio_channels)
+{
+    uint8_t ch_val;
+
+    if (audio_channels <= HDMI_AUD_2CH)
+        ch_val = 0x01;
+    else if (audio_channels <= HDMI_AUD_4CH)
+        ch_val = 0x03;
+    else if (audio_channels <= HDMI_AUD_6CH)
+        ch_val = 0x07;
+    else
+        ch_val = 0x0f;
+
+    ms7210_update_bits(dev, MS7210_HDMI_TX_AUDIO_CH_EN_REG + 
+                       dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST,
+                       0x0f, ch_val);
+}
+
+// 设置视频信息帧
+void ms7210_hdmi_tx_shell_set_video_infoframe(ms7210_dev_t *dev, struct hdmi_config *hc)
+{
+    int i;
+    uint8_t frame[14];
+    uint16_t reg_base = dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST;
+
+    /* "AVI packet is enabled, active is high" */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_SHELL_CTRL_REG + reg_base, 
+                       0x40, 0x00);
+
+    memset(frame, 0, sizeof(frame));
+
+    // 配置AVI信息帧
+    frame[1] = ((hc->color_space << 5) & 0x60) |
+               0x10 | /* Active Format Information Present, Active */
+               (hc->scan_info & 0x03);
+
+    // 配置色度
+    if (hc->colorimetry == HDMI_COLORIMETRY_601) {
+        frame[2] = 0x40;
+    } else if ((hc->colorimetry == HDMI_COLORIMETRY_709) || 
+               (hc->colorimetry == HDMI_COLORIMETRY_1120)) {
+        frame[2] = 0x80;
+    } else if (hc->colorimetry == HDMI_COLORIMETRY_XVYCC601) {
+        frame[2] = 0xc0;
+        frame[3] &= ~0x70;
+    } else if (hc->colorimetry == HDMI_COLORIMETRY_XVYCC709) {
+        frame[2] = 0xc0;
+        frame[3] = 0x10;
+    } else {
+        frame[2] &= ~0xc0;
+        frame[3] &= ~0x70;
+    }
+
+    // 配置宽高比
+    if (hc->aspect_ratio == HDMI_4X3)
+        frame[2] |= 0x10;
+    else if (hc->aspect_ratio == HDMI_16X9)
+        frame[2] |= 0x20;
+
+    frame[2] |= 0x08;  // 默认宽高比编码
+
+    // 配置VIC
+    frame[4] = (hc->vic >= 64) ? 0 : hc->vic;
+    frame[5] = hc->clk_rpt;
+
+    // 计算校验和
+    frame[0] = 0x82 + 0x02 + 0x0D;
+    for (i = 1; i < 14; i++)
+        frame[0] += frame[i];
+    frame[0] = 0x100 - frame[0];
+
+    // 写入信息帧
+    ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_TYPE_REG + reg_base, 0x82);
+    ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_VER_REG + reg_base, 0x02);
+    ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_LEN_REG + reg_base, 0x0D);
+
+    for (i = 0; i < 14; i++)
+        ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_PACK_REG + reg_base, 
+                     frame[i]);
+
+    ms7210_update_bits(dev, MS7210_HDMI_TX_SHELL_CTRL_REG + reg_base, 
+                       0x40, 0x40);
+}
+
+// 设置音频信息帧
+void ms7210_hdmi_tx_shell_set_audio_infoframe(ms7210_dev_t *dev, struct hdmi_config *hc)
+{
+    int i;
+    uint8_t frame[14];
+    uint16_t reg_base = dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST;
+
+    ms7210_update_bits(dev, MS7210_HDMI_TX_SHELL_CTRL_REG + reg_base, 
+                       0x20, 0x00);
+
+    memset(frame, 0, sizeof(frame));
+    frame[0] = 0x84;
+    frame[1] = 0x01;
+    frame[2] = 0x0A;
+    frame[3] = 0x84 + 0x01 + 0x0A;
+    frame[4] = hc->audio_channels;
+    frame[5] = 0;
+    frame[7] = hc->audio_speaker_locations;
+
+    // 计算校验和
+    for (i = 4; i < 14; i++)
+        frame[3] += frame[i];
+    frame[3] = 0x100 - frame[3];
+
+    // 写入信息帧
+    ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_TYPE_REG + reg_base, frame[0]);
+    ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_VER_REG + reg_base, frame[1]);
+    ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_LEN_REG + reg_base, frame[2]);
+
+    for (i = 3; i < 14; i++)
+        ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_PACK_REG + reg_base, 
+                     frame[i]);
+
+    ms7210_update_bits(dev, MS7210_HDMI_TX_SHELL_CTRL_REG + reg_base, 
+                       0x20, 0x20);
+}
+
+// 设置厂商特定信息帧
+void ms7210_hdmi_tx_shell_set_vendor_specific_infoframe(ms7210_dev_t *dev, struct hdmi_config *hc)
+{
+    int i;
+    uint8_t frame[32];
+    uint16_t reg_base = dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST;
+
+    ms7210_update_bits(dev, MS7210_HDMI_TX_SHELL_CFG_REG + reg_base, 
+                       0x01, 0x00);
+
+    memset(frame, 0, sizeof(frame));
+    frame[0] = 0x81;
+    frame[1] = 0x01;
+    frame[2] = 0x1B;
+    frame[3] = 0x81 + 0x01 + 0x1B;
+    frame[4] = 0x03;  // 24bit IEEE
+    frame[5] = 0x0C;
+    frame[6] = 0x00;
+    frame[7] = hc->video_format << 5;  // HDMI_VIDEO_FORMAT
+    frame[8] = hc->h4Kx2K_vic;  // HDMI_VIC
+
+    // 计算校验和
+    for (i = 4; i < 31; i++)
+        frame[3] += frame[i];
+    frame[3] = 0x100 - frame[3];
+
+    // 写入信息帧
+    ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_TYPE_REG + reg_base, frame[0]);
+    ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_VER_REG + reg_base, frame[1]);
+    ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_LEN_REG + reg_base, frame[2]);
+
+    for (i = 3; i < 31; i++)
+        ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_PACK_REG + reg_base, 
+                     frame[i]);
+
+    ms7210_update_bits(dev, MS7210_HDMI_TX_SHELL_CFG_REG + reg_base, 
+                       0x01, 0x01);
+}
+
+// 时钟源选择
+void ms7210_hdmi_tx_clk_sel(ms7210_dev_t *dev, unsigned int sel)
+{
+    switch (sel) {
+        case 0:
+            /* clk from rx */
+            ms7210_update_bits(dev, MS7210_MISC_CLK_CTRL4_REG,
+                              0x0c, 1 << 2);
+            break;
+        case 1:
+            /* clk from dvin */
+            ms7210_update_bits(dev, MS7210_MISC_CLK_CTRL4_REG,
+                              0x0d, (2 << 2) | 0x01);
+            ms7210_update_bits(dev, MS7210_HDMI_TX_PLL_CTRL1_REG + 
+                              dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST,
+                              0x18, 0 << 3);
+            break;
+    }
+}
+
+// PHY初始化
+void ms7210_hdmi_tx_phy_init(ms7210_dev_t *dev, unsigned int tmds)
+{
+    unsigned int main_po, post_po;
+    uint16_t reg_base = dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST;
+
+    /* tmds_clk > 200MHz */
+    main_po = (tmds > 20000) ? 9 : 4;
+    post_po = (tmds > 20000) ? 9 : 7;
+
+    /* PLL init, use Hardware auto mode */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PLL_CFG_SEL_REG + reg_base, 
+                       0x07, 0x00);
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PLL_CTRL1_REG + reg_base, 
+                       0x01, 0x01);
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PLL_CTRL4_REG + reg_base, 
+                       0x08, 0x08);
+
+    /* misc clk and reset */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_MISC_ACLK_SEL_REG, 0xf0, 0xf0);
+    ms7210_update_bits(dev, MS7210_HDMI_TX_MISC_RST_CTRL1_REG, 0xf0, 0xf0);
+
+    /* clk drive */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_MAIN_PREC_2_REG + reg_base,
+                       0x70, 4 << 4); /* clk main pre */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_MAIN_POC_2_REG + reg_base,
+                       0xf0, 2 << 4); /* clk main po */
+
+    /* data0 drive */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_MAIN_PRE0_1_REG + reg_base,
+                       0x07, 4 << 0); /* data main pre */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_MAIN_PO0_1_REG + reg_base,
+                       0x0f, main_po << 0); /* data main po */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_POST_PRE_REG + reg_base,
+                       0x01, 1 << 0); /* data post pre */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_POST_PO0_1_REG + reg_base,
+                       0x0f, post_po << 0); /* data post po */
+
+    /* data1 drive */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_MAIN_PRE0_1_REG + reg_base,
+                       0x70, 4 << 4); /* data main pre */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_MAIN_PO0_1_REG + reg_base,
+                       0xf0, main_po << 4); /* data main po */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_POST_PRE_REG + reg_base,
+                       0x02, 1 << 1); /* data post pre */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_POST_PO0_1_REG + reg_base,
+                       0xf0, post_po << 4); /* data post po */
+
+    /* data2 drive */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_MAIN_PREC_2_REG + reg_base,
+                       0x07, 4 << 0); /* data main pre */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_MAIN_POC_2_REG + reg_base,
+                       0x07, main_po << 0); /* data main po */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_POST_PRE_REG + reg_base,
+                       0x04, 1 << 2); /* data post pre */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_POST_PO2_REG + reg_base,
+                       0x0f, post_po << 0); /* data post po */
+
+    ms7210_write(dev, MS7210_HDMI_TX_PLL_POWER_REG + reg_base, 0x20);
+
+    /* High speed configuration for TMDS > 10GHz */
+    if ((tmds / 100) > 100) {
+        ms7210_update_bits(dev, MS7210_HDMI_TX_PLL_CTRL6_REG + reg_base,
+                          0x04, 0x04);
+        ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_POWER_REG + reg_base,
+                          0x40, 0x40);
+        ms7210_write(dev, MS7210_HDMI_TX_PHY_MAIN_PO0_1_REG + reg_base, 0xdd);
+        ms7210_write(dev, MS7210_HDMI_TX_PHY_MAIN_POC_2_REG + reg_base, 0x0d);
+        ms7210_write(dev, MS7210_HDMI_TX_PHY_POST_PO0_1_REG + reg_base, 0x88);
+        ms7210_write(dev, MS7210_HDMI_TX_PHY_POST_PO2_REG + reg_base, 0x08);
+    } else {
+        ms7210_update_bits(dev, MS7210_HDMI_TX_PLL_CTRL6_REG + reg_base, 
+                          0x04, 0x00);
+        ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_POWER_REG + reg_base, 
+                          0x40, 0x00);
+        ms7210_write(dev, MS7210_HDMI_TX_PHY_MAIN_PO0_1_REG + reg_base, 0x11);
+        ms7210_write(dev, MS7210_HDMI_TX_PHY_MAIN_POC_2_REG + reg_base, 0x01);
+        ms7210_write(dev, MS7210_HDMI_TX_PHY_POST_PO0_1_REG + reg_base, 0x11);
+        ms7210_write(dev, MS7210_HDMI_TX_PHY_POST_PO2_REG + reg_base, 0x01);
+    }
+
+    /* HBR audio mode clock configuration (<= 350MHz) */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PLL_CTRL5_REG + reg_base,
+                       0x03, 0x02);
+}
+
+// PHY电源控制
+void ms7210_hdmi_tx_phy_power_enable(ms7210_dev_t *dev, bool enable)
+{
+    uint16_t reg_base = dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST;
+
+    /* PLL power control */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PLL_POWER_REG + reg_base, 
+                       0x07, (enable) ? 0 : 0x07);
+
+    /* PHY power control */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_POWER_REG + reg_base, 
+                       0x0a, (enable) ? 0x0a : 0);
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PHY_POWER_REG + reg_base, 
+                       0x20, (enable) ? 0 : 0x20);
+}
+
+// 设置时钟比率
+void ms7210_hdmi_tx_phy_set_clk_ratio(ms7210_dev_t *dev, int ratio)
+{
+    unsigned int val = 0;
+
+    switch (ratio) {
+        case 0:  // Normal clock
+            val = 0;
+            break;
+        case 1:  // Double clock (x2)
+            val = 0x04;
+            break;
+        case 2:  // Half clock (1/2)
+            val = 0x40;
+            break;
+    }
+    ms7210_update_bits(dev, MS7210_HDMI_TX_PLL_CTRL11_REG +
+                       dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST,
+                       0x44, val);
+}
+
+// Shell复位控制
+void ms7210_hdmi_tx_shell_reset_enable(ms7210_dev_t *dev, bool en)
+{
+    /* video and audio reset */
+    ms7210_update_bits(dev, MS7210_HDMI_TX_MISC_HDMI_RST_REG,
+                       0x11 << dev->tx_channel,
+                       (en) ? 0x00 : (0x11 << dev->tx_channel));
+}
+
+void ms7210_hdmi_tx_phy_set_clk(ms7210_dev_t *dev, unsigned int clk)
+{
+    // 触发PLL配置
+    ms7210_write(dev, MS7210_HDMI_TX_PLL_TRIG_REG + 
+                 dev->tx_channel * MS7210_HDMI_TX_CHN_REG_ADDRESS_OFST, 
+                 0x01);
+    
+    // 等待PLL时钟稳定
+    // 要求延时>100us, 这里使用10ms以确保足够的稳定时间
+    usleep(10000);  // 10ms = 10000us
 }
