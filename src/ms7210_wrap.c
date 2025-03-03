@@ -49,10 +49,10 @@ int ms7210_write(ms7210_dev_t *dev, uint16_t reg, uint8_t value)
         return -1;
     }
 
-    // ret = ms7210_check(dev, reg, value);
-    // if(ret < 0) {
-    //     return ret;
-    // }
+    ret = ms7210_check(dev, reg, value);
+    if(ret < 0) {
+        return ret;
+    }
 
     return 0;
 }
@@ -135,17 +135,35 @@ int ms7210_write(ms7210_dev_t *dev, uint16_t reg, uint8_t value)
 
 int ms7210_write16(ms7210_dev_t *dev, uint16_t reg, uint16_t value)
 {
-    int err;
-    
-    // if ((err = ms7210_write(dev, reg, value & 0xFF)) < 0)
-    //     return err;
-        
-    // return ms7210_write(dev, reg + 1, (value >> 8) & 0xFF);
+    uint8_t buf[3];
+    struct i2c_msg messages[1];
+    struct i2c_rdwr_ioctl_data packets;
+    int ret;
 
-    if ((err = ms7210_write(dev, reg, (value >> 8) & 0xFF)) < 0)
-        return err;
-    
-    return ms7210_write(dev, reg + 1, value & 0xFF);
+    buf[3] = (value >> 8) & 0xFF;
+    buf[2] = value;
+    buf[1] = (reg >> 8) & 0xFF;
+    buf[0] = reg & 0xFF; 
+
+    messages[0].addr = MS7210_I2C_ADDR;
+    messages[0].flags = 0;
+    messages[0].len = 4;
+    messages[0].buf = buf;
+
+    packets.msgs = messages;
+    packets.nmsgs = 1;
+
+    if(ioctl(dev->i2c_fd, I2C_RDWR, &packets) < 0) {
+        printf("Write reg 0x%04x failed: %s\n", reg, strerror(errno));
+        return -1;
+    }
+
+    // ret = ms7210_check(dev, reg, value);
+    // if(ret < 0) {
+    //     return ret;
+    // }
+
+    return 0;
 }
 
 int ms7210_read(ms7210_dev_t *dev, uint16_t reg, uint8_t *value)
@@ -154,8 +172,8 @@ int ms7210_read(ms7210_dev_t *dev, uint16_t reg, uint8_t *value)
     struct i2c_msg messages[2];
     struct i2c_rdwr_ioctl_data packets;
 
-    buf[0] = (reg >> 8) & 0xFF;
-    buf[1] = reg & 0xFF;
+    buf[1] = (reg >> 8) & 0xFF;
+    buf[0] = reg & 0xFF;
 
     messages[0].addr = MS7210_I2C_ADDR;
     messages[0].flags = 0;
