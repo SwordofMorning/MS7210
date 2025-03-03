@@ -580,8 +580,10 @@ void ms7210_hdmi_tx_phy_config(ms7210_dev_t *dev, unsigned int video_clk)
     printf("Enabling PHY power...\n");
     ms7210_hdmi_tx_phy_power_enable(dev, true);
     
+    // @note I set here as 1 second, wich is better than 200ms or 10ms that producer recomemended
     printf("Waiting for PLL power stability...\n");
-    usleep(10000);
+    // usleep(200 * 1000);
+    sleep(1);
     
     printf("Setting PHY clock...\n");
     ms7210_hdmi_tx_phy_set_clk(dev, video_clk);
@@ -838,9 +840,13 @@ void ms7210_hdmi_tx_shell_set_video_infoframe(ms7210_dev_t *dev, struct hdmi_con
     ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_VER_REG + reg_base, 0x02);
     ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_LEN_REG + reg_base, 0x0D);
 
+    printf("set_video_infoframe: Wrte for each Frame\n");
+
     for (i = 0; i < 14; i++)
-        ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_PACK_REG + reg_base, 
-                     frame[i]);
+    {
+        printf("Frame %d: ", i);
+        ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_PACK_REG + reg_base, frame[i]);
+    }
 
     ms7210_update_bits(dev, MS7210_HDMI_TX_SHELL_CTRL_REG + reg_base, 
                        0x40, 0x40);
@@ -875,9 +881,12 @@ void ms7210_hdmi_tx_shell_set_audio_infoframe(ms7210_dev_t *dev, struct hdmi_con
     ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_VER_REG + reg_base, frame[1]);
     ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_LEN_REG + reg_base, frame[2]);
 
+    printf("set_audio_infoframe: Write for each frame\n");
     for (i = 3; i < 14; i++)
-        ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_PACK_REG + reg_base, 
-                     frame[i]);
+    {
+        printf("Frame %d: ", i);
+        ms7210_write(dev, MS7210_HDMI_TX_SHELL_INFO_PACK_REG + reg_base, frame[i]);
+    }
 
     ms7210_update_bits(dev, MS7210_HDMI_TX_SHELL_CTRL_REG + reg_base, 
                        0x20, 0x20);
