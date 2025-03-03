@@ -3,6 +3,7 @@
 int main(int argc, char *argv[])
 {
     ms7210_dev_t dev;
+    dev.tx_channel = 0;
     char *i2c_dev = "/dev/i2c-7";
     int width = 1920;
     int height = 1080;
