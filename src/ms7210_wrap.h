@@ -260,6 +260,7 @@ void ms7210_hdmi_tx_phy_power_enable(ms7210_dev_t *dev, bool enable);
 void ms7210_hdmi_tx_phy_set_clk_ratio(ms7210_dev_t *dev, int ratio);
 void ms7210_hdmi_tx_shell_reset_enable(ms7210_dev_t *dev, bool en);
 void ms7210_hdmi_tx_phy_set_clk(ms7210_dev_t *dev, unsigned int clk);
+int ms7210_read16(ms7210_dev_t *dev, uint16_t reg, uint16_t *value);
 
 #ifdef __cplusplus
 }

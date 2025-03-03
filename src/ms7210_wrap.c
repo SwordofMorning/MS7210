@@ -24,6 +24,30 @@ static int ms7210_check(ms7210_dev_t *dev, uint16_t reg, uint8_t write_value)
     return 0;
 }
 
+static int ms7210_check16(ms7210_dev_t *dev, uint16_t reg, uint16_t write_value)
+{
+    uint16_t read_value;
+    int ret;
+    
+    ret = ms7210_read16(dev, reg, &read_value);
+    if (ret < 0) {
+        printf("Check16 reg 0x%04x failed - read error\n", reg);
+        return ret;
+    }
+    
+    if (read_value != write_value) {
+        printf("Check16 reg 0x%04x failed - write: 0x%02x, read: 0x%02x\n",
+               reg, write_value, read_value);
+        return -1;
+    }
+    
+    #if 1
+    printf("Check16 reg 0x%04x success - value: 0x%02x\n", reg, read_value);
+    #endif
+    
+    return 0;
+}
+
 #if 1
 int ms7210_write(ms7210_dev_t *dev, uint16_t reg, uint8_t value)
 {
@@ -158,10 +182,10 @@ int ms7210_write16(ms7210_dev_t *dev, uint16_t reg, uint16_t value)
         return -1;
     }
 
-    // ret = ms7210_check(dev, reg, value);
-    // if(ret < 0) {
-    //     return ret;
-    // }
+    ret = ms7210_check16(dev, reg, value);
+    if(ret < 0) {
+        return ret;
+    }
 
     return 0;
 }
@@ -193,6 +217,58 @@ int ms7210_read(ms7210_dev_t *dev, uint16_t reg, uint8_t *value)
         return -1;
     }
 
+    return 0;
+}
+
+int ms7210_read16(ms7210_dev_t *dev, uint16_t reg, uint16_t *value)
+{
+    uint8_t buf[2];
+    uint8_t data[2];  // 用于存储读取的2个字节
+    struct i2c_msg messages[2];
+    struct i2c_rdwr_ioctl_data packets;
+    int ret;
+    int retry_count = 0;
+    const int MAX_RETRIES = 3;
+    const int RETRY_DELAY_US = 1000;
+
+    if (retry_count > 0) {
+        printf("Retrying read16 reg 0x%04x (attempt %d/%d)...\n", 
+                reg, retry_count + 1, MAX_RETRIES);
+    }
+
+    // 设置寄存器地址（LSB优先）
+    buf[1] = (reg >> 8) & 0xFF;  // 高字节
+    buf[0] = reg & 0xFF;         // 低字节
+
+    // 第一条消息：写入寄存器地址
+    messages[0].addr = MS7210_I2C_ADDR;
+    messages[0].flags = 0;        // 写操作
+    messages[0].len = 2;
+    messages[0].buf = buf;
+
+    // 第二条消息：读取2字节数据
+    messages[1].addr = MS7210_I2C_ADDR;
+    messages[1].flags = I2C_M_RD; // 读操作
+    messages[1].len = 2;          // 读取2字节
+    messages[1].buf = data;
+
+    packets.msgs = messages;
+    packets.nmsgs = 2;
+
+    ret = ioctl(dev->i2c_fd, I2C_RDWR, &packets);
+    if(ret < 0)
+    {
+        printf("Read16 reg 0x%04x failed (attempt %d/%d): %s\n", 
+                reg, retry_count + 1, MAX_RETRIES, strerror(errno));
+        
+        if (retry_count >= MAX_RETRIES - 1) {
+            printf("Max retries reached for read16 reg 0x%04x, giving up\n", reg);
+            return -1;
+        }
+    }
+
+    // 组合两个字节为16位值（低字节在前）
+    *value = (data[1] << 8) | data[0];
     return 0;
 }
 
